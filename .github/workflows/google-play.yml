@@ -12,13 +12,12 @@ on:
   workflow_dispatch:
     inputs:
       track:
-        description: "Wear Play track (wear:internal, wear:alpha, …)"
+        description: "Wear Play track (wear:qa = internal testing per Play API)"
         required: true
-        default: wear:internal
+        default: wear:qa
         type: choice
         options:
-          - wear:internal
-          - wear:alpha
+          - wear:qa
           - wear:beta
           - wear:production
 
@@ -115,11 +114,13 @@ jobs:
       - name: Resolve Wear Play track
         if: steps.secrets.outputs.skip != 'true'
         env:
-          TRACK_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.track || vars.PLAY_DEFAULT_TRACK || 'wear:internal' }}
+          TRACK_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.track || vars.PLAY_DEFAULT_TRACK || 'wear:qa' }}
         run: |
           RAW="$TRACK_INPUT"
           case "$RAW" in
+            wear:internal) PLAY_TRACK="wear:qa" ;;
             wear:*) PLAY_TRACK="$RAW" ;;
+            internal|qa) PLAY_TRACK="wear:qa" ;;
             *) PLAY_TRACK="wear:$RAW" ;;
           esac
           if [[ ! "$PLAY_TRACK" =~ ^wear: ]]; then

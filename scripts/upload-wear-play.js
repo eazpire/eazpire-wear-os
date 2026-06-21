@@ -9,7 +9,7 @@ function parseArgs() {
   const out = {
     package: 'com.eazpire.wear.os',
     aab: 'app/build/outputs/bundle/release/app-release.aab',
-    track: 'wear:internal',
+    track: 'wear:qa',
     symbols: '',
     status: 'completed',
   };
@@ -20,8 +20,9 @@ function parseArgs() {
     else if (args[i] === '--symbols') out.symbols = args[++i];
     else if (args[i] === '--status') out.status = args[++i];
   }
+  if (out.track === 'wear:internal' || out.track === 'internal') out.track = 'wear:qa';
   if (!out.track.startsWith('wear:')) {
-    console.error(`::error::Refusing phone track "${out.track}" — use wear:internal`);
+    console.error(`::error::Refusing phone track "${out.track}" — use wear:qa (internal testing)`);
     process.exit(1);
   }
   return out;
