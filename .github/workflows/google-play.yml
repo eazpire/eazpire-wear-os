@@ -1,3 +1,9 @@
+# Signed AAB → Google Play (Wear OS app com.eazpire.wear.os)
+#
+# Mirror repo: eazpire-wear-os
+# Wear bundles must use wear:* tracks — not phone internal/alpha/beta/production.
+# Setup: node scripts/setup/setup-wear-player-github-play.js --json ... --keystore ...
+
 name: Google Play (AAB)
 
 on:
@@ -6,31 +12,56 @@ on:
   workflow_dispatch:
     inputs:
       track:
-        description: "Play track"
+        description: "Wear Play track (wear:internal, wear:alpha, …)"
         required: true
-        default: internal
+        default: wear:internal
         type: choice
-        options: [internal, alpha, beta, production]
+        options:
+          - wear:internal
+          - wear:alpha
+          - wear:beta
+          - wear:production
 
 jobs:
   upload:
     if: vars.ENABLE_GOOGLE_PLAY == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        env:
+          PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$PLAY_JSON" ]; then
+            echo "::error::Secret PLAY_SERVICE_ACCOUNT_JSON fehlt auf eazpire-wear-os"
+            exit 1
+          fi
+          if [ -z "$KS_B64" ]; then
+            echo "::error::Secret ANDROID_KEYSTORE_BASE64 fehlt auf eazpire-wear-os"
+            exit 1
+          fi
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
       - name: Decode release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.keystore
+
       - name: Write keystore.properties
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -43,18 +74,51 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=release.keystore
           EOF
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      - name: Compute VERSION_CODE
+        run: |
+          RUN='${{ github.run_number }}'
+          BASE='${{ vars.PLAY_VERSION_CODE_BASE }}'
+          if [ -n "$BASE" ]; then
+            VERSION_CODE=$(( BASE + RUN ))
+          else
+            VERSION_CODE=$(( 2 + RUN ))
+          fi
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "Using VERSION_CODE=$VERSION_CODE"
+
       - name: Build release AAB
         env:
           CI: "true"
-          VERSION_CODE: ${{ github.run_number }}
-        run: ./gradlew :app:bundleRelease --no-daemon
-      - name: Upload to Google Play
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.eazpire.wear.os
-          releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          track: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.track || vars.PLAY_DEFAULT_TRACK || 'internal' }}
-          status: completed
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+        run: ./gradlew :app:bundleRelease --no-daemon --stacktrace
+
+      - name: Resolve Wear Play track
+        env:
+          TRACK_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.track || vars.PLAY_DEFAULT_TRACK || 'wear:internal' }}
+        run: |
+          RAW="$TRACK_INPUT"
+          case "$RAW" in
+            wear:*) PLAY_TRACK="$RAW" ;;
+            *) PLAY_TRACK="wear:$RAW" ;;
+          esac
+          if [[ ! "$PLAY_TRACK" =~ ^wear: ]]; then
+            echo "::error::Wear AAB must use track wear:* (got '$PLAY_TRACK')"
+            exit 1
+          fi
+          echo "PLAY_TRACK=$PLAY_TRACK" >> "$GITHUB_ENV"
+          echo "Using Play track: $PLAY_TRACK"
+
+      - name: Upload to Google Play (wear track)
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          PLAY_TRACK: ${{ env.PLAY_TRACK }}
+        run: |
+          npm install --no-save googleapis@144
+          node scripts/upload-wear-play.js \
+            --package com.eazpire.wear.os \
+            --track "$PLAY_TRACK" \
+            --aab app/build/outputs/bundle/release/app-release.aab
