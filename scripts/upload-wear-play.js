@@ -45,6 +45,50 @@ async function getTrackReleases(publisher, packageName, editId, track) {
   return row?.releases || [];
 }
 
+async function listTrackNames(publisher, packageName, editId) {
+  const res = await publisher.edits.tracks.list({ packageName, editId });
+  return (res.data.tracks || []).map((t) => t.track).filter(Boolean);
+}
+
+async function createClosedWearTrack(publisher, packageName, editId, trackName) {
+  if (!trackName.startsWith('wear:')) trackName = `wear:${trackName}`;
+  await publisher.edits.tracks.create({
+    packageName,
+    editId,
+    requestBody: {
+      track: trackName,
+      type: 'CLOSED_TESTING',
+      formFactor: 'WEAR',
+    },
+  });
+  console.log(`Created Wear closed-testing track ${trackName}`);
+  return trackName;
+}
+
+async function resolveWearTrack(publisher, packageName, editId, preferred) {
+  const names = await listTrackNames(publisher, packageName, editId);
+  console.log(`Available Play tracks: ${names.length ? names.join(', ') : '(none)'}`);
+  if (names.includes(preferred)) return preferred;
+
+  const fallbacks = ['wear:ci-internal', 'wear:internal'];
+  for (const fb of fallbacks) {
+    if (names.includes(fb)) {
+      console.log(`Preferred ${preferred} missing — using existing ${fb}`);
+      return fb;
+    }
+  }
+
+  try {
+    return await createClosedWearTrack(publisher, packageName, editId, 'wear:ci-internal');
+  } catch (e) {
+    const msg = formatPlayApiError(e);
+    throw new Error(
+      `${msg} — Enable Wear internal testing in Play Console (Testing → Internal testing → Wear OS), ` +
+        `then retry. Tracks seen: ${names.join(', ') || 'none'}`
+    );
+  }
+}
+
 async function assignVersionToTrack(publisher, packageName, editId, track, versionCode, status) {
   const existing = await getTrackReleases(publisher, packageName, editId, track);
   const codeStr = String(versionCode);
@@ -53,20 +97,33 @@ async function assignVersionToTrack(publisher, packageName, editId, track, versi
   );
   if (already) {
     console.log(`versionCode ${versionCode} already assigned to ${track}`);
-    return;
+    return track;
   }
 
   const releases = [{ status, versionCodes: [codeStr] }];
 
-  await publisher.edits.tracks.update({
-    packageName,
-    editId,
-    track,
-    requestBody: { track, releases },
-  });
+  try {
+    await publisher.edits.tracks.update({
+      packageName,
+      editId,
+      track,
+      requestBody: { track, releases },
+    });
+  } catch (e) {
+    const msg = formatPlayApiError(e);
+    if (!/track not found/i.test(msg)) throw e;
+    track = await resolveWearTrack(publisher, packageName, editId, track);
+    await publisher.edits.tracks.update({
+      packageName,
+      editId,
+      track,
+      requestBody: { track, releases },
+    });
+  }
   console.log(
     `Assigned versionCode ${versionCode} to ${track} (one ${status} release; prior codes removed from track)`
   );
+  return track;
 }
 
 function formatPlayApiError(e) {
@@ -101,7 +158,7 @@ async function main() {
     if (!versionCode) throw new Error('Bundle upload returned no versionCode');
     console.log(`Uploaded AAB versionCode=${versionCode}`);
 
-    await assignVersionToTrack(
+    const usedTrack = await assignVersionToTrack(
       publisher,
       opts.package,
       editId,
@@ -109,6 +166,7 @@ async function main() {
       versionCode,
       opts.status
     );
+    console.log(`Release track: ${usedTrack}`);
 
     await publisher.edits.commit({
       packageName: opts.package,
