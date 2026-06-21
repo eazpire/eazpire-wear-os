@@ -171,9 +171,8 @@ async function main() {
     await publisher.edits.commit({
       packageName: opts.package,
       editId,
-      changesNotSentForReview: true,
     });
-    console.log('Edit committed (changesNotSentForReview=true — promote in Play Console if needed).');
+    console.log(`Edit committed — release on ${usedTrack}.`);
   } catch (e) {
     try {
       await publisher.edits.delete({ packageName: opts.package, editId });
