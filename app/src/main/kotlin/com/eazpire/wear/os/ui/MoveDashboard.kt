@@ -1,6 +1,7 @@
 package com.eazpire.wear.os.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
@@ -52,7 +53,7 @@ fun MoveDashboard(tokenStore: SecureTokenStore) {
 
     LaunchedEffect(Unit) { refresh() }
 
-    androidx.wear.compose.foundation.layout.Column(
+    Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,

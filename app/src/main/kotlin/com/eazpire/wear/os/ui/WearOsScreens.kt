@@ -1,6 +1,8 @@
 package com.eazpire.wear.os.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,7 +22,7 @@ fun SplashScreen(onFinished: () -> Unit) {
         delay(900)
         onFinished()
     }
-    androidx.wear.compose.foundation.layout.Box(
+    Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
@@ -34,7 +36,7 @@ fun SplashScreen(onFinished: () -> Unit) {
 
 @Composable
 fun PairingScreen() {
-    androidx.wear.compose.foundation.layout.Column(
+    Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
