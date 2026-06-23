@@ -65,6 +65,11 @@ fun MoveDashboard(tokenStore: SecureTokenStore) {
             style = MaterialTheme.typography.body2,
             textAlign = TextAlign.Center,
         )
+        Text(
+            stringResource(R.string.discovery_watch_hint),
+            style = MaterialTheme.typography.caption3,
+            textAlign = TextAlign.Center,
+        )
         Button(
             onClick = {
                 scope.launch {
