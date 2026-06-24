@@ -11,4 +11,7 @@
     <string name="daily_claim">Claim</string>
     <string name="loading">Loading…</string>
     <string name="discovery_watch_hint">Start Explore on your phone for World Discovery map.</string>
+    <string name="m2e_wallet_available">Wallet: %1$.1f EAZC</string>
+    <string name="m2e_wallet_convert">To Shop Credit</string>
+    <string name="m2e_wallet_converting">…</string>
 </resources>

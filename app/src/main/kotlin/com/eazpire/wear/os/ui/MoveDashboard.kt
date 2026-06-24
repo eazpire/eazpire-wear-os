@@ -23,6 +23,7 @@ import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import com.eazpire.wear.core.api.WearPlayerApi
 import com.eazpire.wear.core.auth.SecureTokenStore
+import com.eazpire.wear.core.model.MoveToEarnWallet
 import com.eazpire.wear.os.R
 import com.eazpire.wear.os.health.WatchStepCounter
 import kotlinx.coroutines.flow.first
@@ -35,8 +36,10 @@ fun MoveDashboard(tokenStore: SecureTokenStore) {
     val stepCounter = remember { WatchStepCounter(context) }
     var steps by remember { mutableLongStateOf(0L) }
     var eazToday by remember { mutableLongStateOf(0L) }
+    var m2eWallet by remember { mutableStateOf<MoveToEarnWallet?>(null) }
     var claimAvailable by remember { mutableStateOf(false) }
     var syncing by remember { mutableStateOf(false) }
+    var converting by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -47,6 +50,7 @@ fun MoveDashboard(tokenStore: SecureTokenStore) {
                 steps = status.stepsToday
                 eazToday = status.eazEarnedToday
                 claimAvailable = status.dailyClaimAvailable
+                m2eWallet = status.wallet ?: runCatching { api.moveToEarnWalletModel() }.getOrNull()
             }.onFailure { error = it.message }
         }
     }
@@ -65,6 +69,44 @@ fun MoveDashboard(tokenStore: SecureTokenStore) {
             style = MaterialTheme.typography.body2,
             textAlign = TextAlign.Center,
         )
+        m2eWallet?.let { w ->
+            Text(
+                stringResource(R.string.m2e_wallet_available, w.balanceEazcAvailable),
+                style = MaterialTheme.typography.caption2,
+                textAlign = TextAlign.Center,
+            )
+            if (w.balanceEazcAvailable >= w.minConvertEaz) {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            converting = true
+                            error = null
+                            runCatching {
+                                val r = api.moveToEarnConvertToShopCredit(
+                                    w.balanceEazcAvailable,
+                                    "wear_os",
+                                )
+                                if (!r.optBoolean("ok", false)) {
+                                    error = r.optString("error", "Convert failed")
+                                }
+                                refresh()
+                            }.onFailure { error = it.message }
+                            converting = false
+                        }
+                    },
+                    enabled = !converting && !syncing,
+                    modifier = Modifier.fillMaxWidth(0.85f),
+                ) {
+                    Text(
+                        if (converting) {
+                            stringResource(R.string.m2e_wallet_converting)
+                        } else {
+                            stringResource(R.string.m2e_wallet_convert)
+                        },
+                    )
+                }
+            }
+        }
         Text(
             stringResource(R.string.discovery_watch_hint),
             style = MaterialTheme.typography.caption3,
